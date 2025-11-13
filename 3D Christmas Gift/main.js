@@ -4,13 +4,16 @@
 import * as THREE from 'three';
 
 // --- GLOBAL VARS ---
-let scene, camera, renderer, car, road, stars, snow;
+let scene, camera, renderer, car, road, stars, snow, christmasStar;
 let ambientLight, dirLight;
 let loaderElement = document.getElementById('loader');
 
 // Arrays to hold objects for the journey
 const journeyObjects = new THREE.Group();
 const wheels = [];
+
+// Character references for animation
+let joeChar, jedChar, hikerChar;
 
 // Scroll progress (0.0 to 1.0)
 let scrollT = 0;
@@ -54,9 +57,13 @@ async function init() {
     createWorldObjects(); // This now adds characters
     createStars();
     createSnow(); // Add the "magic"
+    createChristmasStar(); // Add the final star
     
-    scene.add(journeyObjects, stars, snow);
+    scene.add(journeyObjects, stars, snow, christmasStar);
     
+    // Initial state of christmas star
+    christmasStar.visible = false; 
+
     // Hide loader and show scene 1
     loaderElement.style.display = 'none';
     document.getElementById('scene-1').classList.add('visible');
@@ -149,7 +156,6 @@ function createRoad() {
 }
 
 // --- NEW "Character" Function ---
-// This is the "skill" part - a reusable function to create figures
 function createCharacter(color) {
     const char = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.8 });
@@ -165,8 +171,38 @@ function createCharacter(color) {
     return char;
 }
 
+// --- NEW Text Label Function (for mountains) ---
+function createTextLabel(text, position, color = 0xffffff, size = 1) {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    context.font = `${30 * size}px 'Inter'`;
+    context.fillStyle = `#${new THREE.Color(color).getHexString()}`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    const metrics = context.measureText(text);
+    canvas.width = metrics.width + 20; // Add padding
+    canvas.height = 30 * size + 20;
+    context.font = `${30 * size}px 'Inter'`; // Re-set font after canvas resize
+    context.fillStyle = `#${new THREE.Color(color).getHexString()}`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter; // For crisp text
+    const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(spriteMaterial);
+    
+    // Scale sprite based on text size and desired 3D size
+    const aspectRatio = canvas.width / canvas.height;
+    sprite.scale.set(5 * aspectRatio * size, 5 * size, 1); 
+    sprite.position.copy(position);
+    return sprite;
+}
+
+
 function createWorldObjects() {
-    // --- BK Sign (with a character) ---
+    // --- BK Sign (with Joe Character) ---
     const bkSign = new THREE.Group();
     const poleGeo = new THREE.CylinderGeometry(0.1, 0.1, 4, 8);
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 });
@@ -191,12 +227,14 @@ function createWorldObjects() {
     bkSign.position.set(5, 0, -5);
     journeyObjects.add(bkSign);
 
-    // Add BK Character
-    const bkChar = createCharacter(0x0091ff); // Blue
-    bkChar.position.set(4.5, 0, -4);
-    journeyObjects.add(bkChar);
+    // Removed 'BK' text label
 
-    // --- Snacks (with a character) ---
+    // Add Joe Character (blue)
+    joeChar = createCharacter(0x0091ff); // Blue
+    joeChar.position.set(4.5, 0, -4);
+    journeyObjects.add(joeChar);
+
+    // --- Snacks (with Jed Character) ---
     const snacks = new THREE.Group();
     const burgerMat = new THREE.MeshStandardMaterial({ color: 0x966919 });
     const bunGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.2, 16);
@@ -220,13 +258,13 @@ function createWorldObjects() {
     snacks.position.set(-5, 0.5, -30);
     journeyObjects.add(snacks);
     
-    // Add Snack Character
-    const snackChar = createCharacter(0x4ade80); // Green
-    snackChar.position.set(-4.5, 0, -29);
-    journeyObjects.add(snackChar);
+    // Add Jed Character (green)
+    jedChar = createCharacter(0x4ade80); // Green
+    jedChar.position.set(-4.5, 0, -29);
+    journeyObjects.add(jedChar);
 
 
-    // --- Mountains (with a character) ---
+    // --- Mountains (with Hiker Character and labels) ---
     const mountainGeo = new THREE.ConeGeometry(8, 15, 6);
     const mountainMat = new THREE.MeshStandardMaterial({ color: 0x228B22, roughness: 1 });
     const m1 = new THREE.Mesh(mountainGeo, mountainMat);
@@ -236,11 +274,16 @@ function createWorldObjects() {
     m2.position.set(12, 6, -65);
     journeyObjects.add(m1, m2);
 
-    // Add Hiker Character
-    const hikerChar = createCharacter(0xfb923c); // Orange
+    // Add Hiker Character (orange)
+    hikerChar = createCharacter(0xfb923c); // Orange
     hikerChar.position.set(-9, 7.5, -58); // On the mountain
     hikerChar.rotation.y = 0.5;
     journeyObjects.add(hikerChar);
+
+    // Add Mountain Text Labels
+    const helvellynLabel = createTextLabel('HELVELLYN', new THREE.Vector3(-10, 15, -60), 0xffffff, 0.7);
+    const langdaleLabel = createTextLabel('LANGDALE', new THREE.Vector3(12, 10, -65), 0xffffff, 0.7);
+    journeyObjects.add(helvellynLabel, langdaleLabel);
     
     // --- Home ---
     const home = new THREE.Group();
@@ -301,6 +344,34 @@ function createSnow() {
     snow.position.z = -50; // Center the snowfield
 }
 
+// --- NEW Christmas Star Function ---
+function createChristmasStar() {
+    const starShape = new THREE.Shape();
+    starShape.moveTo(0, 1);
+    starShape.lineTo(0.2, 0.2);
+    starShape.lineTo(1, 0.2);
+    starShape.lineTo(0.4, -0.2);
+    starShape.lineTo(0.6, -1);
+    starShape.lineTo(0, -0.6);
+    starShape.lineTo(-0.6, -1);
+    starShape.lineTo(-0.4, -0.2);
+    starShape.lineTo(-1, 0.2);
+    starShape.lineTo(-0.2, 0.2);
+
+    const extrudeSettings = {
+        steps: 1,
+        depth: 0.2,
+        bevelEnabled: false
+    };
+
+    const starGeo = new THREE.ExtrudeGeometry(starShape, extrudeSettings);
+    const starMat = new THREE.MeshBasicMaterial({ color: 0xfde047, emissive: 0xfde047, emissiveIntensity: 2 });
+    christmasStar = new THREE.Mesh(starGeo, starMat);
+    christmasStar.scale.set(1.5, 1.5, 1.5);
+    christmasStar.position.set(0, 5, -journeyLength); // Above the home
+    christmasStar.rotation.y = Math.PI / 4;
+}
+
 // --- ANIMATION & SCROLL ---
 
 function onScroll() {
@@ -316,12 +387,20 @@ function onScroll() {
     const scenes = document.querySelectorAll('.scene-text');
     scenes.forEach(s => s.classList.remove('visible'));
     
-    if (scrollT < 0.08) document.getElementById('scene-1').classList.add('visible');
-    else if (scrollT < 0.25) document.getElementById('scene-2').classList.add('visible');
-    else if (scrollT < 0.45) document.getElementById('scene-3').classList.add('visible');
-    else if (scrollT < 0.65) document.getElementById('scene-4').classList.add('visible');
-    else if (scrollT < 0.85) document.getElementById('scene-5').classList.add('visible');
-    else document.getElementById('scene-6').classList.add('visible');
+    if (scrollT < 0.08) {
+        document.getElementById('scene-1').classList.add('visible');
+    } else if (scrollT < 0.25) {
+        document.getElementById('scene-2').classList.add('visible');
+    } else if (scrollT < 0.45) {
+        document.getElementById('scene-3').classList.add('visible');
+    } else if (scrollT < 0.65) {
+        document.getElementById('scene-4').classList.add('visible');
+        // Removed photo overlay logic
+    } else if (scrollT < 0.85) {
+        document.getElementById('scene-5').classList.add('visible');
+    } else {
+        document.getElementById('scene-6').classList.add('visible');
+    }
 }
 
 // The animation loop
@@ -363,9 +442,46 @@ function animate() {
         }
     }
     snow.geometry.attributes.position.needsUpdate = true;
-    // Move the whole snow system with the camera
-    snow.position.z = camera.position.z - 50;
+    snow.position.z = camera.position.z - 50; // Keep snow centered on camera
 
+    // 5. --- Character Animations (Interactive & Fun) ---
+    // Make them subtly bounce or wave
+    const waveTime = performance.now() * 0.005;
+
+    // Joe at BK (appears when car is near BK sign)
+    if (scrollT > 0.05 && scrollT < 0.15) {
+        joeChar.position.y = 0 + Math.sin(waveTime) * 0.1;
+        joeChar.rotation.y = Math.sin(waveTime * 2) * 0.1;
+    } else {
+        joeChar.position.y = 0;
+        joeChar.rotation.y = 0;
+    }
+
+    // Jed at Snacks (appears when car is near snacks)
+    if (scrollT > 0.25 && scrollT < 0.35) {
+        jedChar.position.y = 0 + Math.sin(waveTime + Math.PI / 2) * 0.1;
+        jedChar.rotation.y = Math.cos(waveTime * 2) * 0.1;
+    } else {
+        jedChar.position.y = 0;
+        jedChar.rotation.y = 0;
+    }
+    
+    // Hiker at Mountains (appears when car is near mountains)
+    if (scrollT > 0.48 && scrollT < 0.58) {
+        hikerChar.position.y = 7.5 + Math.sin(waveTime * 1.5) * 0.2;
+        hikerChar.rotation.y = 0.5 + Math.sin(waveTime * 3) * 0.05;
+    } else {
+        hikerChar.position.y = 7.5;
+        hikerChar.rotation.y = 0.5;
+    }
+
+    // 6. --- Christmas Star Visibility ---
+    if (scrollT > 0.95) { // Show star only at the very end
+        christmasStar.visible = true;
+        christmasStar.rotation.y += 0.01; // Make it spin
+    } else {
+        christmasStar.visible = false;
+    }
 
     // Render the scene
     renderer.render(scene, camera);
